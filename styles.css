@@ -1,0 +1,278 @@
+.navigable-file-tree {
+    user-select: none;
+    height: 100%;
+    overflow-y: auto;
+    background-color: var(--background-primary);
+    font-size: var(--font-ui-small);
+}
+
+.nav-bar {
+    padding: 4px 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    background-color: var(--background-secondary);
+}
+
+.nav-items {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    position: relative;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background-color: var(--background-modifier-hover);
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    transition: all 0.1s ease;
+    user-select: none;
+    position: relative;
+}
+
+.nav-item:hover {
+    background-color: var(--background-modifier-active-hover);
+    color: var(--text-normal);
+}
+
+.nav-item.dragging {
+    opacity: 0.5;
+    background-color: var(--background-modifier-active);
+}
+
+.nav-drag-indicator {
+    position: absolute;
+    width: 2px;
+    background-color: var(--interactive-accent);
+    pointer-events: none;
+    z-index: 1000;
+    transition: all 0.1s ease;
+    border-radius: 1px;
+    box-shadow: 0 0 3px rgba(0, 0, 0, 0.2);
+}
+
+.tree-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    align-items: center;
+}
+
+.tree-search {
+    flex: 1;
+    position: relative;
+    display: flex;
+    align-items: center;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    transition: all 0.1s ease;
+}
+
+.tree-search:focus-within {
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--background-modifier-border-hover);
+}
+
+.tree-search-input {
+    width: 100%;
+    height: 26px;
+    padding: 0 8px 0 32px;
+    border: none;
+    background: none;
+    color: var(--text-normal);
+    font-size: var(--font-ui-small);
+}
+
+.tree-search-input:focus {
+    outline: none;
+}
+
+.tree-search-icon {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+.tree-search-icon svg {
+    width: 16px;
+    height: 16px;
+    color: var(--text-muted);
+}
+
+.tree-tool-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+    border-radius: 4px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-muted);
+    opacity: 0.8;
+    transition: all 0.1s ease;
+}
+
+.tree-tool-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+    opacity: 1;
+}
+
+.tree-tool-button .nav-icon {
+    width: 100%;
+    height: 100%;
+}
+
+.tree-container {
+    padding: 8px 4px;
+}
+
+.tree-item {
+    position: relative;
+    margin: 1px 0;
+    border-radius: 4px;
+    transition: all 0.1s ease;
+}
+
+.tree-item.dragging {
+    opacity: 0.5;
+    background-color: var(--background-modifier-active);
+}
+
+.file-title, .folder-title {
+    display: flex;
+    align-items: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    cursor: pointer;
+    gap: 4px;
+    min-height: 22px;
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+}
+
+.folder-header {
+    display: flex;
+    align-items: center;
+}
+
+.collapse-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-right: 2px;
+    opacity: 0.6;
+    transition: all 0.1s ease;
+    color: var(--text-muted);
+}
+
+.collapse-icon.collapsed {
+    transform: rotate(-90deg);
+}
+
+.folder-children {
+    padding-left: 16px;
+    margin-left: 4px;
+    border-left: 1px solid var(--background-modifier-border-hover);
+    margin-top: 2px;
+    margin-bottom: 2px;
+    min-height: 4px;
+}
+
+.folder-children.drop-target {
+    background-color: var(--background-modifier-hover);
+    border-radius: 4px;
+    border: 1px dashed var(--interactive-accent);
+}
+
+.file-icon, .folder-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+    color: var(--text-muted);
+}
+
+.file-name {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-ext {
+    opacity: 0.5;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-faint);
+}
+
+.tree-item:hover > .file-title,
+.tree-item:hover > .folder-header > .folder-title {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.tree-item:hover .file-icon,
+.tree-item:hover .folder-icon,
+.tree-item:hover .collapse-icon {
+    opacity: 0.8;
+    color: var(--text-normal);
+}
+
+.tree-item.active > .file-title {
+    background-color: var(--background-modifier-active);
+    color: var(--text-accent);
+}
+
+.tree-item.active .file-icon {
+    color: var(--text-accent);
+    opacity: 0.9;
+}
+
+.tree-item.selected > .file-title {
+    background-color: var(--background-modifier-active-hover);
+    color: var(--text-accent);
+}
+
+.tree-item.selected .file-icon {
+    color: var(--text-accent);
+    opacity: 0.9;
+}
+
+.tree-item.selected .file-ext {
+    color: var(--text-accent-hover);
+    opacity: 0.8;
+}
+
+.rename-input {
+    width: 100%;
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    color: var(--text-normal);
+    font-size: var(--font-ui-small);
+}
+
+.rename-input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+    box-shadow: 0 0 0 2px var(--background-modifier-border-hover);
+} 

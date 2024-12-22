@@ -1,0 +1,14 @@
+{
+  "hideAttachments": true,
+  "openOnStartup": true,
+  "attachmentFolders": [
+    "attachments",
+    "_attachments",
+    "assets",
+    "_assets",
+    "images",
+    "_images"
+  ],
+  "showRootNav": true,
+  "pinnedPaths": []
+}

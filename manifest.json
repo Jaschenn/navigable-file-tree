@@ -1,0 +1,10 @@
+{
+    "id": "navigable-file-tree",
+    "name": "Navigable File Tree",
+    "version": "1.0.0",
+    "minAppVersion": "0.15.0",
+    "description": "A file tree plugin with navigation bar for Obsidian",
+    "author": "jaschen",
+    "isDesktopOnly": false,
+    "main": "main.js"
+} 
