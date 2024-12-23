@@ -66,13 +66,11 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
     }
 
     async addToPinnedPaths(path: string) {
-        console.log('Adding path to pinned paths:', path);
         if (!this.pinnedPaths.includes(path)) {
             this.pinnedPaths.push(path);
             this.settings.pinnedPaths = this.pinnedPaths;
             await this.saveSettings();
             if (this.view) {
-                console.log('Refreshing view with new pinned paths:', this.pinnedPaths);
                 this.view.refreshView();
             }
         }
