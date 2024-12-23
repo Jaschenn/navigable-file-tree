@@ -12,6 +12,7 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
     async onload() {
         // 加载设置
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+        this.pinnedPaths = this.settings.pinnedPaths || [];
 
         // 注册视图类型
         this.registerView(
@@ -20,7 +21,7 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
         );
 
         // 添加ribbon图标
-        const ribbonIconEl = this.addRibbonIcon('list-tree', 'File Tree', () => {
+        const ribbonIconEl = this.addRibbonIcon('list-tree', 'Navigable File Tree', () => {
             this.activateView();
         });
         
@@ -40,17 +41,11 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
         if (this.settings.openOnStartup) {
             this.activateView();
         }
-
-        // 加载保存的导航路径
-        this.loadData().then((data) => {
-            this.pinnedPaths = data?.pinnedPaths || [];
-            this.view?.refreshView();
-        });
     }
 
     async onunload() {
         // 保存导航路径
-        await this.saveData({ pinnedPaths: this.pinnedPaths });
+        await this.saveData(this.settings);
     }
 
     async activateView() {
@@ -70,15 +65,23 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
         }
     }
 
-    addToPinnedPaths(path: string) {
+    async addToPinnedPaths(path: string) {
+        console.log('Adding path to pinned paths:', path);
         if (!this.pinnedPaths.includes(path)) {
             this.pinnedPaths.push(path);
-            this.view?.refreshView();
+            this.settings.pinnedPaths = this.pinnedPaths;
+            await this.saveSettings();
+            if (this.view) {
+                console.log('Refreshing view with new pinned paths:', this.pinnedPaths);
+                this.view.refreshView();
+            }
         }
     }
 
     removeFromPinnedPaths(path: string) {
         this.pinnedPaths = this.pinnedPaths.filter(p => p !== path);
+        this.settings.pinnedPaths = this.pinnedPaths;
+        this.saveSettings();
         this.view?.refreshView();
     }
 
@@ -87,6 +90,7 @@ export default class NavigableFileTreePlugin extends Plugin implements INavigabl
     }
 
     public savePinnedPaths(paths: string[]): void {
+        this.pinnedPaths = paths;
         this.settings.pinnedPaths = paths;
         this.saveSettings();
     }

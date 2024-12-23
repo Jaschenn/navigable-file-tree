@@ -1,4 +1,16 @@
-import { ItemView, WorkspaceLeaf, TFolder, TFile, Menu, Notice, TAbstractFile } from 'obsidian';
+import { 
+    ItemView, 
+    WorkspaceLeaf, 
+    TFile, 
+    TFolder, 
+    Menu, 
+    Notice, 
+    setIcon, 
+    TAbstractFile,
+    Component,
+    View,
+    FileView
+} from 'obsidian';
 import { INavigableFileTreePlugin } from './types';
 
 interface FileTreeState {
@@ -13,8 +25,8 @@ interface FileTreeState {
 export class FileTreeView extends ItemView {
     private state: FileTreeState = {
         currentPath: '/',
-        collapsedFolders: new Set(),
-        selectedItems: new Set(),
+        collapsedFolders: new Set<string>(),
+        selectedItems: new Set<string>(),
         lastSelectedItem: null,
         sortOrder: 'asc',
         sortBy: 'name'
@@ -22,44 +34,6 @@ export class FileTreeView extends ItemView {
 
     constructor(leaf: WorkspaceLeaf, private plugin: INavigableFileTreePlugin) {
         super(leaf);
-        this.initializeEventListeners();
-    }
-
-    private initializeEventListeners() {
-        // 监听文件变化
-        this.registerEvent(
-            this.app.vault.on('modify', () => {
-                // 只在当前文件被修改时更新
-                const activeFile = this.app.workspace.getActiveFile();
-                if (activeFile) {
-                    this.updateFileState(activeFile);
-                }
-            })
-        );
-
-        this.registerEvent(
-            this.app.vault.on('rename', () => this.refreshView())
-        );
-
-        this.registerEvent(
-            this.app.vault.on('delete', () => this.refreshView())
-        );
-
-        // 监听活动文件变化
-        this.registerEvent(
-            this.app.workspace.on('active-leaf-change', () => {
-                // 只更新活动状态，不完全刷新
-                this.updateActiveState();
-            })
-        );
-
-        // 监听全局点击事件
-        this.registerDomEvent(document, 'click', (e: MouseEvent) => {
-            if (!this.containerEl.contains(e.target as Node)) {
-                this.state.selectedItems.clear();
-                this.updateSelection();
-            }
-        });
     }
 
     getViewType(): string {
@@ -71,59 +45,205 @@ export class FileTreeView extends ItemView {
     }
 
     getIcon(): string {
-        return 'list-tree';
+        return 'folder';
     }
 
     async onOpen() {
-        this.renderView();
+        this.initializeEventListeners();
+        this.refreshView();
+    }
+
+    private initializeEventListeners() {
+        // 监听文件创建事件
+        this.registerEvent(
+            this.app.vault.on('create', () => {
+                this.refreshView();
+            })
+        );
+
+        // 监听文件删除事件
+        this.registerEvent(
+            this.app.vault.on('delete', () => {
+                this.refreshView();
+            })
+        );
+
+        // 监听文件重命名事件
+        this.registerEvent(
+            this.app.vault.on('rename', () => {
+                this.refreshView();
+            })
+        );
+
+        // 监听活动文件变化事件
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', () => {
+                this.updateActiveState();
+            })
+        );
     }
 
     public refreshView() {
-        const container = this.containerEl.children[1] as HTMLElement;
+        const container = this.contentEl;
         if (!container) return;
-        
-        const scrollTop = container.scrollTop;
+
+        container.empty();
         this.renderView();
-        container.scrollTop = scrollTop;
     }
 
     private renderView() {
-        const container = this.containerEl.children[1] as HTMLElement;
-        container.empty();
+        const container = this.contentEl;
         
+        // 渲染导航栏
         this.renderNavigationBar(container);
+        
+        // 渲染工具栏
         this.renderToolbar(container);
+        
+        // 渲染文件树
         this.renderFileTree(container);
     }
 
     private renderNavigationBar(container: HTMLElement) {
-        const navBar = container.createEl('div', { cls: 'nav-bar' });
-        const navItems = navBar.createEl('div', { cls: 'nav-items' });
-
-        if (this.plugin.settings.showRootNav) {
-            this.createNavButton(navItems, {
-                icon: '<path fill="currentColor" d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>',
-                text: 'Root',
-                onClick: () => this.navigateTo('/'),
-                draggable: false
-            });
+        // 获取固定的路径
+        const pinnedPaths = this.plugin.getPinnedPaths();
+        
+        // 如果没有固定项，不显示导航栏
+        if (pinnedPaths.length === 0) {
+            return;
         }
 
-        // 渲染固定的导航项
-        const pinnedPaths = this.plugin.getPinnedPaths();
+        const navBar = container.createEl('div', { cls: 'nav-bar' });
+        const navItems = navBar.createEl('div', { cls: 'nav-items' });
+        
+        // 渲染固定的文件和文件夹
         pinnedPaths.forEach((path, index) => {
-            this.createNavButton(navItems, {
-                icon: '<path fill="currentColor" d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>',
-                text: path.split('/').pop() || '',
-                onClick: () => this.navigateTo(path),
-                onContextMenu: (e) => this.showPinnedItemMenu(e, path),
-                draggable: true,
-                dragData: { path, index }
-            });
+            const file = this.app.vault.getAbstractFileByPath(path);
+            if (file) {
+                this.createNavButton(navItems, {
+                    icon: file instanceof TFile ? 'document' : 'folder',
+                    text: file.name,
+                    onClick: () => file instanceof TFile ? this.openFile(file) : this.navigateTo(file.path),
+                    onContextMenu: (e) => this.showPinnedItemMenu(e, path),
+                    draggable: true,
+                    dragData: { type: 'pinned-item', path, index }
+                });
+            }
         });
 
-        // 添加拖拽排序功能
-        this.setupDragAndDrop(navItems);
+        // 设置拖拽排序功能
+        this.setupPinnedItemsDragAndDrop(navItems);
+    }
+
+    private setupPinnedItemsDragAndDrop(container: HTMLElement) {
+        let draggedItem: HTMLElement | null = null;
+        let dragIndicator: HTMLElement | null = null;
+        let lastDropTarget: { element: HTMLElement, isAfter: boolean } | null = null;
+
+        const createDragIndicator = () => {
+            if (dragIndicator) return dragIndicator;
+            dragIndicator = container.createEl('div', { cls: 'nav-drag-indicator' });
+            return dragIndicator;
+        };
+
+        const removeDragIndicator = () => {
+            dragIndicator?.remove();
+            dragIndicator = null;
+            lastDropTarget = null;
+        };
+
+        const updateDragIndicator = (target: HTMLElement, e: DragEvent) => {
+            const indicator = createDragIndicator();
+            const rect = target.getBoundingClientRect();
+            const isAfter = e.clientX > rect.left + rect.width / 2;
+
+            // 如果目标和位置没有变化，不更新指示器
+            if (lastDropTarget?.element === target && lastDropTarget?.isAfter === isAfter) {
+                return isAfter;
+            }
+
+            lastDropTarget = { element: target, isAfter };
+            
+            indicator.style.height = '24px';
+            indicator.style.top = `${rect.top - container.getBoundingClientRect().top}px`;
+            
+            if (isAfter) {
+                indicator.style.left = `${rect.right - container.getBoundingClientRect().left}px`;
+                indicator.classList.add('after');
+                indicator.classList.remove('before');
+            } else {
+                indicator.style.left = `${rect.left - container.getBoundingClientRect().left}px`;
+                indicator.classList.add('before');
+                indicator.classList.remove('after');
+            }
+
+            return isAfter;
+        };
+
+        container.addEventListener('dragstart', (e) => {
+            draggedItem = e.target as HTMLElement;
+            if (draggedItem?.classList.contains('nav-item')) {
+                draggedItem.classList.add('dragging');
+                e.dataTransfer?.setData('text/plain', draggedItem.getAttribute('data-path') || '');
+            }
+        });
+
+        container.addEventListener('dragend', () => {
+            if (draggedItem) {
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
+            }
+            removeDragIndicator();
+        });
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!draggedItem) return;
+
+            const target = e.target as HTMLElement;
+            const navItem = target.closest('.nav-item') as HTMLElement;
+            
+            if (navItem && navItem !== draggedItem) {
+                updateDragIndicator(navItem, e);
+            }
+        });
+
+        container.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!draggedItem) return;
+
+            const target = e.target as HTMLElement;
+            const navItem = target.closest('.nav-item') as HTMLElement;
+            
+            if (navItem && navItem !== draggedItem) {
+                const pinnedPaths = this.plugin.getPinnedPaths();
+                const fromPath = draggedItem.getAttribute('data-path');
+                const toPath = navItem.getAttribute('data-path');
+                
+                if (fromPath && toPath) {
+                    const fromIndex = pinnedPaths.indexOf(fromPath);
+                    const toIndex = pinnedPaths.indexOf(toPath);
+                    
+                    if (fromIndex !== -1 && toIndex !== -1) {
+                        pinnedPaths.splice(fromIndex, 1);
+                        const isAfter = updateDragIndicator(navItem, e);
+                        const newIndex = isAfter ? toIndex + 1 : toIndex;
+                        pinnedPaths.splice(newIndex, 0, fromPath);
+                        this.plugin.savePinnedPaths(pinnedPaths);
+                        this.refreshView();
+                    }
+                }
+            }
+            
+            removeDragIndicator();
+        });
+
+        container.addEventListener('dragleave', (e) => {
+            const target = e.target as HTMLElement;
+            if (!container.contains(target)) {
+                removeDragIndicator();
+            }
+        });
     }
 
     private createNavButton(container: HTMLElement, options: {
@@ -132,16 +252,20 @@ export class FileTreeView extends ItemView {
         onClick: () => void,
         onContextMenu?: (e: MouseEvent) => void,
         draggable: boolean,
-        dragData?: { path: string, index: number }
+        dragData?: { type: string, path: string, index: number }
     }) {
         const btn = container.createEl('button', { 
             cls: 'nav-item',
-            attr: { draggable: options.draggable }
+            attr: { 
+                draggable: options.draggable,
+                'data-path': options.dragData?.path || ''
+            }
         });
-        btn.innerHTML = `
-            <svg viewBox="0 0 24 24" class="nav-icon">${options.icon}</svg>
-            <span>${options.text}</span>
-        `;
+        
+        const iconEl = btn.createEl('div', { cls: 'nav-icon' });
+        setIcon(iconEl, options.icon);
+        btn.createEl('span', { text: options.text });
+        
         btn.onclick = options.onClick;
         if (options.onContextMenu) {
             btn.oncontextmenu = options.onContextMenu;
@@ -154,7 +278,7 @@ export class FileTreeView extends ItemView {
         return btn;
     }
 
-    private setupDraggableItem(element: HTMLElement, dragData: { path: string, index: number }) {
+    private setupDraggableItem(element: HTMLElement, dragData: { type: string, path: string, index: number }) {
         element.addEventListener('dragstart', (e) => {
             e.dataTransfer?.setData('text/plain', JSON.stringify(dragData));
             element.classList.add('dragging');
@@ -163,98 +287,6 @@ export class FileTreeView extends ItemView {
         element.addEventListener('dragend', () => {
             element.classList.remove('dragging');
         });
-    }
-
-    private setupDragAndDrop(container: HTMLElement) {
-        let draggedOver: HTMLElement | null = null;
-        let dragIndicatorUpdateTimeout: NodeJS.Timeout;
-        let dropTarget: { element: HTMLElement, insertAfter: boolean } | null = null;
-
-        container.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const target = e.target as HTMLElement;
-            const navItem = target.closest('.nav-item') as HTMLElement;
-            
-            if (navItem && !navItem.classList.contains('dragging')) {
-                if (draggedOver !== navItem) {
-                    draggedOver = navItem;
-                }
-                
-                // 更新拖拽指示器和目标位置
-                clearTimeout(dragIndicatorUpdateTimeout);
-                dragIndicatorUpdateTimeout = setTimeout(() => {
-                    const rect = navItem.getBoundingClientRect();
-                    const insertAfter = (e.clientX - rect.left) / rect.width > 0.5;
-                    dropTarget = { element: navItem, insertAfter };
-                    this.updateDragIndicator(container, navItem, e.clientX);
-                }, 10);
-            }
-        });
-
-        container.addEventListener('dragleave', (e) => {
-            const target = e.target as HTMLElement;
-            const navItem = target.closest('.nav-item') as HTMLElement;
-            
-            if (!navItem || !container.contains(navItem)) {
-                this.removeDragIndicator();
-                draggedOver = null;
-                dropTarget = null;
-            }
-        });
-
-        container.addEventListener('drop', (e) => {
-            e.preventDefault();
-            this.removeDragIndicator();
-            clearTimeout(dragIndicatorUpdateTimeout);
-            
-            if (!dropTarget) return;
-
-            try {
-                const dragData = JSON.parse(e.dataTransfer?.getData('text/plain') || '');
-                const dropIndex = Array.from(container.children).indexOf(dropTarget.element);
-                
-                if (typeof dragData.index === 'number') {
-                    const pinnedPaths = this.plugin.getPinnedPaths();
-                    const [movedPath] = pinnedPaths.splice(dragData.index, 1);
-                    const newIndex = dropTarget.insertAfter ? dropIndex + 1 : dropIndex;
-                    
-                    pinnedPaths.splice(newIndex, 0, movedPath);
-                    this.plugin.savePinnedPaths(pinnedPaths);
-                    this.refreshView();
-                }
-            } catch (error) {
-                console.error('Failed to process drag and drop:', error);
-            } finally {
-                dropTarget = null;
-                draggedOver = null;
-            }
-        });
-    }
-
-    private updateDragIndicator(container: HTMLElement, target: HTMLElement, clientX: number) {
-        this.removeDragIndicator();
-        
-        const rect = target.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-        const indicator = container.createEl('div', { cls: 'nav-drag-indicator' });
-        
-        // 计算鼠标相对于目标元素的水平位置比例
-        const relativeX = (clientX - rect.left) / rect.width;
-        
-        if (relativeX > 0.5) {
-            // 放置在目标元素后面
-            indicator.style.left = `${rect.right - containerRect.left}px`;
-        } else {
-            // 放置在目标元素前面
-            indicator.style.left = `${rect.left - containerRect.left}px`;
-        }
-        
-        indicator.style.top = `${rect.top - containerRect.top}px`;
-        indicator.style.height = `${rect.height}px`;
-    }
-
-    private removeDragIndicator() {
-        this.containerEl.querySelectorAll('.nav-drag-indicator').forEach(el => el.remove());
     }
 
     private async navigateTo(path: string) {
@@ -284,20 +316,19 @@ export class FileTreeView extends ItemView {
     private async openFile(file: TFile) {
         this.state.selectedItems.clear();
         
-        // 检查文件是否已经在某个标签页中打开
+        // 检查文件是否已经某个标签页中打开
         const viewType = file.extension === 'canvas' ? 'canvas' : 'markdown';
         const existingLeaf = this.app.workspace.getLeavesOfType(viewType)
             .find(leaf => {
                 const view = leaf.view;
-                if (view.getViewType() === viewType) {
-                    const currentFile = (view as any).file;
-                    return currentFile && currentFile.path === file.path;
+                if (view.getViewType() === viewType && view instanceof FileView) {
+                    return view.file?.path === file.path;
                 }
                 return false;
             });
 
         if (existingLeaf) {
-            // 如果文件已经打开，直接切��到对应标签页
+            // 如果文件已经打开，直接切换到对应标签页
             this.app.workspace.setActiveLeaf(existingLeaf, { focus: true });
         } else {
             // 获取当前活动的标签页
@@ -375,24 +406,39 @@ export class FileTreeView extends ItemView {
 
         // 添加展开/折叠按钮
         this.createToolbarButton(toolbar, {
-            icon: '<path fill="currentColor" d="M16.59 8.59L12 13.17 7.41 8.59 6 10l6 6 6-6-1.41-1.41z"/>',
+            icon: 'chevron-down-square',
             tooltip: 'Expand/Collapse All',
             onClick: () => this.toggleAllFolders()
         });
         
         // 添加新建按钮
         this.createToolbarButton(toolbar, {
-            icon: '<path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>',
+            icon: 'plus-square',
             tooltip: 'Create New',
             onClick: (e) => this.showCreateMenu(e)
         });
-        
+
         // 添加排序按钮
         this.createToolbarButton(toolbar, {
-            icon: '<path fill="currentColor" d="M3 18h6v-2H3v2zM3 6v2h18V6H3zm0 7h12v-2H3v2z"/>',
+            icon: 'list-ordered',
             tooltip: 'Sort',
             onClick: (e) => this.showSortMenu(e)
         });
+    }
+
+    private createToolbarButton(container: HTMLElement, options: {
+        icon: string,
+        tooltip: string,
+        onClick: (e: MouseEvent) => void
+    }) {
+        const button = container.createEl('button', { 
+            cls: 'tree-tool-button',
+            attr: { 'aria-label': options.tooltip }
+        });
+        const iconEl = button.createEl('div', { cls: 'nav-icon' });
+        setIcon(iconEl, options.icon);
+        button.onclick = options.onClick;
+        return button;
     }
 
     private toggleAllFolders() {
@@ -420,13 +466,15 @@ export class FileTreeView extends ItemView {
         const searchText = searchTerm.toLowerCase().trim();
 
         if (!searchText) {
-            // 如果搜索词为空,显示所有内容
+            // 如果搜索词为空，显示所有内容
             treeItems.forEach((item: HTMLElement) => {
-                item.style.display = '';
+                item.classList.remove('hidden');
                 if (item.classList.contains('folder')) {
                     const children = item.querySelector('.folder-children') as HTMLElement;
                     if (children) {
-                        children.style.display = this.state.collapsedFolders.has(item.getAttribute('data-path') || '') ? 'none' : '';
+                        children.classList.toggle('collapsed', 
+                            this.state.collapsedFolders.has(item.getAttribute('data-path') || '')
+                        );
                     }
                 }
             });
@@ -465,27 +513,13 @@ export class FileTreeView extends ItemView {
                         if (collapseIcon) {
                             collapseIcon.classList.remove('collapsed');
                         }
-                        (children as HTMLElement).style.display = '';
+                        (children as HTMLElement).classList.remove('collapsed');
                     }
                 }
             }
             
-            item.style.display = isMatch ? '' : 'none';
+            item.classList.toggle('hidden', !isMatch);
         });
-    }
-
-    private createToolbarButton(container: HTMLElement, options: {
-        icon: string,
-        tooltip: string,
-        onClick: (e: MouseEvent) => void
-    }) {
-        const button = container.createEl('button', { 
-            cls: 'tree-tool-button',
-            attr: { 'aria-label': options.tooltip }
-        });
-        button.innerHTML = `<svg viewBox="0 0 24 24" class="nav-icon">${options.icon}</svg>`;
-        button.onclick = options.onClick;
-        return button;
     }
 
     private showCreateMenu(e: MouseEvent) {
@@ -555,20 +589,36 @@ export class FileTreeView extends ItemView {
 
     private showPinnedItemMenu(e: MouseEvent, path: string) {
         const menu = new Menu();
-        menu.addItem((item) => {
-            item.setTitle('Remove from Navigation')
-                .setIcon('trash')
-                .onClick(() => {
-                    this.plugin.removeFromPinnedPaths(path);
-                    this.refreshView();
+        const file = this.app.vault.getAbstractFileByPath(path);
+        
+        if (file) {
+            if (file instanceof TFile) {
+                menu.addItem((item) => {
+                    item.setTitle('Open in New Tab')
+                        .setIcon('lucide-split')
+                        .onClick(async () => {
+                            const leaf = this.app.workspace.splitActiveLeaf();
+                            await leaf.openFile(file);
+                        });
                 });
-        });
+            }
+
+            menu.addItem((item) => {
+                item.setTitle('Remove from Navigation')
+                    .setIcon('trash')
+                    .onClick(() => {
+                        this.plugin.removeFromPinnedPaths(path);
+                        this.refreshView();
+                    });
+            });
+        }
+        
         menu.showAtMouseEvent(e);
     }
 
     private async createNewFile(extension: 'md' | 'canvas', targetFolder?: TFolder) {
-        const parent = targetFolder || this.app.vault.getAbstractFileByPath(this.state.currentPath) as TFolder;
-        if (!parent || !(parent instanceof TFolder)) return;
+        const parentFile = targetFolder || this.app.vault.getAbstractFileByPath(this.state.currentPath);
+        if (!parentFile || !(parentFile instanceof TFolder)) return;
 
         let baseName = 'Untitled';
         let counter = 0;
@@ -578,7 +628,7 @@ export class FileTreeView extends ItemView {
         // 检查文件名是否存在，如存在则添加序号
         do {
             fileName = counter === 0 ? baseName : `${baseName} ${counter}`;
-            filePath = `${parent.path}/${fileName}.${extension}`;
+            filePath = `${parentFile.path}/${fileName}.${extension}`;
             counter++;
         } while (this.app.vault.getAbstractFileByPath(filePath));
 
@@ -610,18 +660,18 @@ export class FileTreeView extends ItemView {
     }
 
     private async createNewFolder(targetFolder?: TFolder) {
-        const parent = targetFolder || this.app.vault.getAbstractFileByPath(this.state.currentPath) as TFolder;
-        if (!parent || !(parent instanceof TFolder)) return;
+        const parentFile = targetFolder || this.app.vault.getAbstractFileByPath(this.state.currentPath);
+        if (!parentFile || !(parentFile instanceof TFolder)) return;
 
         let baseName = 'New Folder';
         let counter = 0;
         let folderName = baseName;
         let folderPath = '';
 
-        // 检查文件夹名是否存在，如果存在则添加序号
+        // 检查文件夹名是否存在，果存在则添加序号
         do {
             folderName = counter === 0 ? baseName : `${baseName} ${counter}`;
-            folderPath = `${parent.path}/${folderName}`;
+            folderPath = `${parentFile.path}/${folderName}`;
             counter++;
         } while (this.app.vault.getAbstractFileByPath(folderPath));
 
@@ -666,12 +716,12 @@ export class FileTreeView extends ItemView {
         const vault = this.app.vault;
         const root = vault.getRoot();
         
-        const targetFolder = this.state.currentPath === '/' 
+        const targetFile = this.state.currentPath === '/' 
             ? root 
             : vault.getAbstractFileByPath(this.state.currentPath);
 
-        if (targetFolder instanceof TFolder) {
-            this.renderFolderContents(treeContainer, targetFolder);
+        if (targetFile instanceof TFolder) {
+            this.renderFolderContents(treeContainer, targetFile);
         }
     }
 
@@ -722,47 +772,28 @@ export class FileTreeView extends ItemView {
 
         const fileTitle = fileEl.createEl('div', { cls: 'file-title' });
 
-        // 添��文件图标
+        // 添加文件图标
         const fileIcon = fileTitle.createEl('span', { cls: 'file-icon' });
-        fileIcon.innerHTML = this.getFileIcon(file);
+        this.setFileIcon(fileIcon, file);
 
         // 添加文件名（不含扩展名）
-        fileTitle.createEl('span', {
+        fileTitle.createEl('span', { 
             cls: 'file-name',
             text: file.basename
         });
 
         // 添加扩展名
-        fileTitle.createEl('span', {
+        fileTitle.createEl('span', { 
             cls: 'file-ext',
             text: '.' + file.extension
         });
 
-        // 绑定拖拽事件
-        this.setupDraggableFile(fileEl, file);
-
-        // 绑定点击事件
-        fileTitle.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (e.ctrlKey || e.metaKey) {
-                this.toggleFileSelection(file);
-            } else if (e.shiftKey && this.state.lastSelectedItem) {
-                this.selectFileRange(file);
-            } else {
-                if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
-                    this.state.selectedItems.clear();
-                }
-                this.state.selectedItems.add(file.path);
-                this.state.lastSelectedItem = file.path;
-                await this.openFile(file);
-            }
-            this.updateSelection();
-        });
-        
-        // 添加右键菜单
+        // 绑定事件
+        fileTitle.onclick = (e) => this.handleFileClick(file, e);
         fileTitle.oncontextmenu = (e) => this.showFileContextMenu(e, file);
+
+        // 设置拖拽
+        this.setupDraggableFile(fileEl, file);
     }
 
     private renderFolderItem(container: HTMLElement, folder: TFolder) {
@@ -780,16 +811,19 @@ export class FileTreeView extends ItemView {
         const collapseIcon = folderHeader.createEl('div', { 
             cls: `collapse-icon ${this.state.collapsedFolders.has(folder.path) ? 'collapsed' : ''}` 
         });
-        collapseIcon.innerHTML = `<svg viewBox="0 0 24 24" class="nav-icon"><path fill="currentColor" d="M7 10l5 5 5-5H7z"/></svg>`;
+        setIcon(collapseIcon, 'chevron-down');
 
         const folderTitle = folderHeader.createEl('div', { cls: 'folder-title' });
 
         // 添加文件夹图标
         const folderIcon = folderTitle.createEl('span', { cls: 'folder-icon' });
-        folderIcon.innerHTML = `<svg viewBox="0 0 24 24" class="nav-icon"><path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+        setIcon(folderIcon, 'folder');
 
         // 添加文件夹名称
         folderTitle.createEl('span', { text: folder.name });
+
+        // 设置文件夹标题作为放置区域
+        this.setupFolderDropZone(folderTitle, folder);
 
         // 绑定拖拽事件
         this.setupDraggableFolder(folderEl, folder);
@@ -807,12 +841,162 @@ export class FileTreeView extends ItemView {
 
         folderTitle.oncontextmenu = (e) => this.showFolderContextMenu(e, folder);
 
-        // 如果文件夹未折叠，渲染��内容
+        // 如果文件夹未折叠，渲染内容
         if (!this.state.collapsedFolders.has(folder.path)) {
             const childrenContainer = folderEl.createEl('div', { cls: 'folder-children' });
             this.setupDropZone(childrenContainer, folder);
             this.renderFolderContents(childrenContainer, folder);
+        } else {
+            const childrenContainer = folderEl.createEl('div', { cls: 'folder-children collapsed' });
+            this.setupDropZone(childrenContainer, folder);
         }
+    }
+
+    private setupFolderDropZone(element: HTMLElement, folder: TFolder) {
+        let dragEnterCount = 0;
+        let dropTimeout: NodeJS.Timeout;
+
+        element.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount++;
+            
+            // 清除之前的超时
+            if (dropTimeout) {
+                clearTimeout(dropTimeout);
+            }
+
+            element.classList.add('drop-target');
+        });
+
+        element.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount--;
+            
+            if (dragEnterCount === 0) {
+                // 设置一个短暂的延迟，避免闪烁
+                dropTimeout = setTimeout(() => {
+                    element.classList.remove('drop-target');
+                }, 50);
+            }
+        });
+
+        element.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 设置放置效果
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = 'move';
+            }
+        });
+
+        element.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount = 0;
+            element.classList.remove('drop-target');
+
+            try {
+                const data = JSON.parse(e.dataTransfer?.getData('text/plain') || '');
+                
+                if (data.type === 'file') {
+                    // 处理文件拖拽
+                    const paths = data.paths as string[];
+                    for (const path of paths) {
+                        const file = this.app.vault.getAbstractFileByPath(path);
+                        if (file instanceof TFile && file.parent !== folder) {
+                            const newPath = `${folder.path}/${file.name}`;
+                            await this.app.vault.rename(file, newPath);
+                        }
+                    }
+                } else if (data.type === 'folder') {
+                    // 处理文件夹拖拽
+                    const sourceFile = this.app.vault.getAbstractFileByPath(data.path);
+                    if (sourceFile instanceof TFolder && sourceFile !== folder && !folder.path.startsWith(sourceFile.path)) {
+                        const newPath = `${folder.path}/${sourceFile.name}`;
+                        await this.app.vault.rename(sourceFile, newPath);
+                    }
+                }
+                
+                this.refreshView();
+            } catch (error) {
+                console.error('Failed to process drop:', error);
+                new Notice('Failed to move item(s)');
+            }
+        });
+    }
+
+    private setupDropZone(element: HTMLElement, folder: TFolder) {
+        let dragEnterCount = 0;
+        let dropTimeout: NodeJS.Timeout;
+
+        element.addEventListener('dragenter', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount++;
+            
+            if (dropTimeout) {
+                clearTimeout(dropTimeout);
+            }
+
+            element.classList.add('drop-target');
+        });
+
+        element.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount--;
+            
+            if (dragEnterCount === 0) {
+                dropTimeout = setTimeout(() => {
+                    element.classList.remove('drop-target');
+                }, 50);
+            }
+        });
+
+        element.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer) {
+                e.dataTransfer.dropEffect = 'move';
+            }
+        });
+
+        element.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            dragEnterCount = 0;
+            element.classList.remove('drop-target');
+
+            try {
+                const data = JSON.parse(e.dataTransfer?.getData('text/plain') || '');
+                
+                if (data.type === 'file') {
+                    // 处理文件拖拽
+                    const paths = data.paths as string[];
+                    for (const path of paths) {
+                        const file = this.app.vault.getAbstractFileByPath(path);
+                        if (file instanceof TFile && file.parent !== folder) {
+                            const newPath = `${folder.path}/${file.name}`;
+                            await this.app.vault.rename(file, newPath);
+                        }
+                    }
+                } else if (data.type === 'folder') {
+                    // 处理文件夹拖拽
+                    const sourceFile = this.app.vault.getAbstractFileByPath(data.path);
+                    if (sourceFile instanceof TFolder && sourceFile !== folder && !folder.path.startsWith(sourceFile.path)) {
+                        const newPath = `${folder.path}/${sourceFile.name}`;
+                        await this.app.vault.rename(sourceFile, newPath);
+                    }
+                }
+                
+                this.refreshView();
+            } catch (error) {
+                console.error('Failed to process drop:', error);
+                new Notice('Failed to move item(s)');
+            }
+        });
     }
 
     private setupDraggableFile(element: HTMLElement, file: TFile) {
@@ -851,58 +1035,6 @@ export class FileTreeView extends ItemView {
         });
     }
 
-    private setupDropZone(element: HTMLElement, folder: TFolder) {
-        element.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
-            const draggingEl = this.containerEl.querySelector('.dragging');
-            if (!draggingEl) return;
-
-            element.classList.add('drop-target');
-        });
-
-        element.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drop-target');
-        });
-
-        element.addEventListener('drop', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            element.classList.remove('drop-target');
-
-            try {
-                const data = JSON.parse(e.dataTransfer?.getData('text/plain') || '');
-                
-                if (data.type === 'file') {
-                    // 处理文件拖拽
-                    const paths = data.paths as string[];
-                    for (const path of paths) {
-                        const file = this.app.vault.getAbstractFileByPath(path) as TFile;
-                        if (file && file.parent !== folder) {
-                            const newPath = `${folder.path}/${file.name}`;
-                            await this.app.vault.rename(file, newPath);
-                        }
-                    }
-                } else if (data.type === 'folder') {
-                    // 处理文件夹拖拽
-                    const sourceFolder = this.app.vault.getAbstractFileByPath(data.path) as TFolder;
-                    if (sourceFolder && sourceFolder !== folder && !folder.path.startsWith(sourceFolder.path)) {
-                        const newPath = `${folder.path}/${sourceFolder.name}`;
-                        await this.app.vault.rename(sourceFolder, newPath);
-                    }
-                }
-                
-                this.refreshView();
-            } catch (error) {
-                console.error('Failed to process drop:', error);
-                new Notice('Failed to move item(s)');
-            }
-        });
-    }
-
     private toggleFolder(folder: TFolder) {
         if (this.state.collapsedFolders.has(folder.path)) {
             this.state.collapsedFolders.delete(folder.path);
@@ -934,7 +1066,7 @@ export class FileTreeView extends ItemView {
                 .setIcon('trash')
                 .onClick(async () => {
                     for (const file of selectedFiles) {
-                        await this.app.vault.delete(file);
+                        await this.app.fileManager.trashFile(file);
                     }
                     this.state.selectedItems.clear();
                     this.refreshView();
@@ -1018,9 +1150,8 @@ export class FileTreeView extends ItemView {
         menu.addItem((item) => {
             item.setTitle('Pin to Navigation')
                 .setIcon('pin')
-                .onClick(() => {
-                    this.plugin.addToPinnedPaths(file.path);
-                    this.refreshView();
+                .onClick(async () => {
+                    await this.plugin.addToPinnedPaths(file.path);
                 });
         });
 
@@ -1036,7 +1167,7 @@ export class FileTreeView extends ItemView {
             item.setTitle('Delete')
                 .setIcon('trash')
                 .onClick(async () => {
-                    await this.app.vault.delete(file);
+                    await this.app.fileManager.trashFile(file);
                     this.refreshView();
                 });
         });
@@ -1068,9 +1199,8 @@ export class FileTreeView extends ItemView {
         menu.addItem((item) => {
             item.setTitle('Pin to Navigation')
                 .setIcon('pin')
-                .onClick(() => {
-                    this.plugin.addToPinnedPaths(folder.path);
-                    this.refreshView();
+                .onClick(async () => {
+                    await this.plugin.addToPinnedPaths(folder.path);
                 });
         });
 
@@ -1086,7 +1216,7 @@ export class FileTreeView extends ItemView {
             item.setTitle('Delete')
                 .setIcon('trash')
                 .onClick(async () => {
-                    await this.app.vault.delete(folder, true);
+                    await this.app.fileManager.trashFile(folder);
                     this.refreshView();
                 });
         });
@@ -1094,15 +1224,18 @@ export class FileTreeView extends ItemView {
         menu.showAtMouseEvent(e);
     }
 
-    private getFileIcon(file: TFile): string {
+    private setFileIcon(element: HTMLElement, file: TFile): void {
         const extension = file.extension.toLowerCase();
         switch (extension) {
             case 'md':
-                return `<svg viewBox="0 0 24 24" class="nav-icon"><path fill="currentColor" d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/></svg>`;
+                setIcon(element, 'document');
+                break;
             case 'canvas':
-                return `<svg viewBox="0 0 24 24" class="nav-icon"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14z"/></svg>`;
+                setIcon(element, 'layout-dashboard');
+                break;
             default:
-                return `<svg viewBox="0 0 24 24" class="nav-icon"><path fill="currentColor" d="M13 9V3.5L18.5 9H13zM6 2c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6H6z"/></svg>`;
+                setIcon(element, 'document');
+                break;
         }
     }
 
@@ -1110,8 +1243,8 @@ export class FileTreeView extends ItemView {
         const itemEl = this.containerEl.querySelector(`[data-path="${item.path}"]`);
         if (!itemEl) return;
 
-        const titleEl = itemEl.querySelector('.file-title, .folder-title') as HTMLElement;
-        if (!titleEl) return;
+        const titleEl = itemEl.querySelector('.file-title, .folder-title');
+        if (!titleEl || !(titleEl instanceof HTMLElement)) return;
 
         const oldName = item.name;
         const baseName = item instanceof TFile ? item.basename : oldName;
@@ -1138,8 +1271,8 @@ export class FileTreeView extends ItemView {
                     
                     // 如果是文件，重命名后重新打开它
                     if (item instanceof TFile) {
-                        const newFile = this.app.vault.getAbstractFileByPath(newPath) as TFile;
-                        if (newFile) {
+                        const newFile = this.app.vault.getAbstractFileByPath(newPath);
+                        if (newFile instanceof TFile) {
                             const leaf = this.app.workspace.getMostRecentLeaf();
                             if (leaf) {
                                 await leaf.openFile(newFile);
