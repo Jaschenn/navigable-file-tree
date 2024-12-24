@@ -45,12 +45,13 @@ export class FileTreeView extends ItemView {
     }
 
     getIcon(): string {
-        return 'folder';
+        return 'list-tree';
     }
 
     async onOpen() {
         this.initializeEventListeners();
         this.refreshView();
+        this.initializeScrollHandler();
     }
 
     private initializeEventListeners() {
@@ -105,16 +106,30 @@ export class FileTreeView extends ItemView {
     }
 
     private renderNavigationBar(container: HTMLElement) {
-        // 获取固定的路径
         const pinnedPaths = this.plugin.getPinnedPaths();
         
         // 如果没有固定项，不显示导航栏
-        if (pinnedPaths.length === 0) {
+        if (pinnedPaths.length === 0 && !this.plugin.settings.showRootNav) {
             return;
         }
 
-        const navBar = container.createEl('div', { cls: 'nav-bar' });
+        const navBar = container.createEl('div', { cls: 'nav-bar has-pinned' });
         const navItems = navBar.createEl('div', { cls: 'nav-items' });
+        
+        // 如果启用了显示根目录选项，添加根目录按钮
+        if (this.plugin.settings.showRootNav) {
+            this.createNavButton(navItems, {
+                icon: 'list-tree',
+                text: 'Root',
+                onClick: () => this.navigateTo('/'),
+                draggable: false
+            });
+
+            // 添加分隔符
+            if (pinnedPaths.length > 0) {
+                navItems.createEl('div', { cls: 'nav-separator' });
+            }
+        }
         
         // 渲染固定的文件和文件夹
         pinnedPaths.forEach((path, index) => {
@@ -1323,5 +1338,24 @@ export class FileTreeView extends ItemView {
                 el.classList.toggle('active', activeFile?.path === path);
             }
         });
+    }
+
+    private initializeScrollHandler() {
+        const container = this.containerEl.querySelector('.tree-container');
+        const toolbar = this.containerEl.querySelector('.tree-toolbar');
+        
+        if (!container || !toolbar) return;
+
+        const observer = new IntersectionObserver(
+            ([e]) => {
+                toolbar.classList.toggle('sticky', e.intersectionRatio < 1);
+            },
+            {
+                threshold: [1],
+                rootMargin: '-1px 0px 0px 0px'
+            }
+        );
+
+        observer.observe(toolbar);
     }
 } 
