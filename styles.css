@@ -1,7 +1,7 @@
 .navigable-file-tree {
     user-select: none;
     height: 100%;
-    background-color: var(--background-primary);
+    /* background-color: var(--background-primary); */
     font-size: var(--font-ui-small);
     display: flex;
     flex-direction: column;
@@ -15,7 +15,7 @@
     flex-shrink: 0;
     padding: 6px 8px;
     border-bottom: 1px solid var(--background-modifier-border);
-    background-color: var(--background-primary);
+    /* background-color: var(--background-primary); */
     height: auto;
     display: none;
 }
@@ -40,8 +40,9 @@
     padding: 2px 8px;
     margin: 0;
     border-radius: 4px;
-    background-color: var(--background-modifier-hover);
-    border: 1px solid transparent;
+    /* background-color: var(--background-primary); */
+    /* background-color: var(--background-modifier-hover); */
+    /* border: 1px solid transparent; */
     cursor: pointer;
     color: var(--text-muted);
     font-size: var(--font-ui-smaller);
@@ -54,14 +55,16 @@
 }
 
 .nav-item:hover {
-    background-color: var(--background-modifier-hover);
+    /* background-color: var(--background-primary); */
+    /* background-color: var(--background-modifier-hover); */
     color: var(--text-normal);
     border-color: var(--background-modifier-border-hover);
 }
 
 .nav-item.dragging {
     opacity: 0.5;
-    background-color: var(--background-modifier-active);
+    /* background-color: var(--background-primary); */
+    /* background-color: var(--background-modifier-active); */
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     z-index: 1000;
 }
@@ -89,21 +92,22 @@
     display: flex;
     gap: 6px;
     padding: 8px;
-    border-bottom: 1px solid var(--background-modifier-border);
+    /* border-bottom: 1px solid var(--background-modifier-border); */
     align-items: center;
-    background-color: var(--background-primary);
+    /* background-color: var(--background-primary); */
     min-height: 44px;
     position: sticky;
     top: 0;
     z-index: 10;
     margin: 0;
     width: 100%;
-    box-sizing: border-box;
+    /* box-sizing: border-box; */
     transition: box-shadow 200ms ease-in-out;
 }
 
 .tree-toolbar.sticky {
-    box-shadow: var(--shadow-s);
+    border-radius: 4px;
+    /* box-shadow: var(--shadow-s); */
 }
 
 .tree-search {
@@ -113,8 +117,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    background-color: var(--background-primary);
-    border: 1px solid var(--background-modifier-border);
+    /* background-color: var(--background-primary); */
     border-radius: 4px;
     transition: all 100ms ease-in-out;
 }
@@ -134,8 +137,16 @@
     font-size: var(--font-ui-small);
 }
 
-.tree-search-input:focus {
-    outline: none;
+.tree-search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.folder-children.collapsed {
+    display: none;
 }
 
 .tree-search-icon {
@@ -162,7 +173,7 @@
     padding: 4px;
     border-radius: 4px;
     background: none;
-    border: 1px solid transparent;
+    /* border: 1px solid transparent; */
     cursor: pointer;
     color: var(--text-muted);
     opacity: 0.8;
@@ -170,14 +181,16 @@
 }
 
 .tree-tool-button:hover {
-    background-color: var(--background-modifier-hover);
+    background-color: var(--background-primary);
+    /* background-color: var(--background-modifier-hover); */
     color: var(--text-normal);
     opacity: 1;
     border-color: var(--background-modifier-border-hover);
 }
 
 .tree-tool-button:active {
-    background-color: var(--background-modifier-active);
+    background-color: var(--background-primary);
+    /* background-color: var(--background-modifier-active); */
     transform: translateY(1px);
 }
 
